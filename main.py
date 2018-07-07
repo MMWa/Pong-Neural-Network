@@ -160,6 +160,7 @@ class Network:
 
     def action(self, state):
         value = self.model.predict(state)
+        value = np.argmax(value) -1
         print(str(value))
         return value
 
@@ -184,10 +185,10 @@ if __name__ == "__main__":
         tmp_ss = np.array([game.paddle1_pos, game.paddle2_pos])
         new_state_1 = np.append(new_state_1,tmp_ss)
         new_state_1.flatten()
+        new_state_1 = np.reshape(new_state_1,(-1,1))
+        print(new_state_1.shape)
 
-        #TODO: fix input shape
-
-        agent1.action_state = model_net.action(new_state_1)
+        agent1.action_state = model_net.action(new_state_1.T)
 
 
         game.draw(window)
