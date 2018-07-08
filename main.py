@@ -85,7 +85,7 @@ class PongGame:
         if int(self.ball_pos[0]) <= self.BALL_RADIUS + self.PAD_WIDTH and int(self.ball_pos[1]) in range(
                 int(self.paddle1_pos[1] - self.HALF_PAD_HEIGHT), int(self.paddle1_pos[1] + self.HALF_PAD_HEIGHT), 1):
             self.ball_vel[0] = -self.ball_vel[0]
-            self.agent1_catch += 1
+            self.agent1_catch = 1
             self.ball_vel[0] *= 1.1
             self.ball_vel[1] *= 1.1
         elif int(self.ball_pos[0]) <= self.BALL_RADIUS + self.PAD_WIDTH:
@@ -96,14 +96,14 @@ class PongGame:
                 self.ball_pos[1]) in range(
             int(self.paddle2_pos[1] - self.HALF_PAD_HEIGHT), int(self.paddle2_pos[1] + self.HALF_PAD_HEIGHT), 1):
             self.ball_vel[0] = -self.ball_vel[0]
-            self.agent2_catch += 1
+            self.agent2_catch = 1
             self.ball_vel[0] *= 1.1
             self.ball_vel[1] *= 1.1
         elif int(self.ball_pos[0]) >= self.WIDTH + 1 - self.BALL_RADIUS - self.PAD_WIDTH:
             self.l_score += 1
             self.ball_init(False)
 
-        return self.ball_pos, self.ball_vel
+        return self.ball_pos[0]/self.WIDTH, self.ball_pos[1]/self.HEIGHT
 
     def draw(self, canvas):
         canvas.fill(BLACK)
@@ -162,9 +162,14 @@ class Network:
 
     def __define_network(self):
         self.model = Sequential()
-        self.model.add(Dense(32, input_shape=(8,)))
-        self.model.add(Dense(100, activation='relu'))
+        self.model.add(Dense(32, input_shape=(4,)))
+
         self.model.add(GaussianDropout(0.3))
+
+        self.model.add(Dense(100, activation='elu'))
+        self.model.add(Dense(100, activation='elu'))
+        self.model.add(Dense(100, activation='elu'))
+
         self.model.add(Dense(3, activation='softmax'))
 
     def __compile_network(self):
@@ -190,6 +195,7 @@ if __name__ == "__main__":
     agent2 = Agent(8)
 
     model_net_1 = Network("m1.h5")
+    model_net_2 = Network("m2.h5")
 
     pygame.init()
     fps = pygame.time.Clock()
@@ -197,30 +203,45 @@ if __name__ == "__main__":
     pygame.display.set_caption('Hello World')
     i = 0
     for i in tqdm(range(100000)):
-        print(str(game.l_score) + " - " + str(game.r_score))
+        if (i % 1000 == 1):
+            game.l_score = 0
+            game.r_score = 0
+            print(str(game.l_score) + " - " + str(game.r_score))
         new_state = np.array(game.tick(agent_action_1=agent1.action(), agent_action_2=agent2.action()))
 
-        hit_count = [game.agent1_catch, game.agent2_catch]
-        hit_sum = np.sum(hit_count)
+        hit_state = [game.agent1_catch, game.agent2_catch]
+        game.agent1_catch = 0
+        game.agent2_catch = 0
 
-        reward_1 = np.multiply(agent1.action_state, hit_sum)
-        reward_2 = np.multiply(agent2.action_state, hit_sum)
+        hit_sum = np.sum(hit_state)
 
-        reward_1 = np.multiply(reward_1, game.l_score)
-        reward_2 = np.multiply(reward_2, game.r_score)
+        reward_1 = agent1.action_state
+        reward_2 = agent2.action_state
 
-        new_state_1 = np.append(new_state, np.array([game.paddle1_pos, game.paddle2_pos]))
+        norm_ball_h = game.ball_pos[1]/game.HEIGHT
+
+        reward_1 = np.subtract(reward_1, abs((game.paddle1_pos[1]/game.HEIGHT) - norm_ball_h))
+        reward_2 = np.subtract(reward_2, abs((game.paddle2_pos[1]/game.HEIGHT) - norm_ball_h))
+
+        reward_1 = np.multiply(reward_1, (game.r_score+1)/(game.l_score+1))
+        reward_2 = np.multiply(reward_2, (game.l_score+1)/(game.r_score+1))
+
+        reward_1 = np.multiply(reward_1, hit_state[0])
+        reward_2 = np.multiply(reward_2, hit_state[1])
+
+        new_state_1 = np.append(new_state, np.array([game.paddle1_pos[1]/game.HEIGHT, game.paddle2_pos[1]/game.HEIGHT]))
         new_state_1.flatten()
         new_state_1 = np.reshape(new_state_1, (-1, 1))
-        model_net_1.train(new_state_1.T, reward_1)
 
-        new_state_2 = np.append(new_state, np.array([game.paddle2_pos, game.paddle1_pos]))
+        new_state_2 = np.append(new_state, np.array([game.paddle2_pos[1]/game.HEIGHT, game.paddle1_pos[1]/game.HEIGHT]))
         new_state_2.flatten()
         new_state_2 = np.reshape(new_state_2, (-1, 1))
-        model_net_1.train(new_state_2.T, reward_2)
+
+        model_net_1.train(new_state_1.T, reward_1)
+        model_net_2.train(new_state_2.T, reward_2)
 
         agent1.action_state = model_net_1.action(new_state_1.T)
-        agent2.action_state = model_net_1.action(new_state_2.T)
+        agent2.action_state = model_net_2.action(new_state_2.T)
 
         game.draw(window)
         pygame.display.update()
