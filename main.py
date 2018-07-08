@@ -158,6 +158,7 @@ class Network:
         try:
             self.model.load_weights(self.filename)
         except:
+            print("error loading " + filename)
             pass
 
         self.__compile_network()
@@ -169,8 +170,7 @@ class Network:
         self.model.add(Dense(32, input_shape=(6,)))
         self.model.add(Dense(64, activation='relu'))
         self.model.add(Dense(128, activation='relu'))
-        self.model.add(Dense(64, activation='relu'))
-        self.model.add(Dense(32, activation='relu'))
+
 
         self.model.add(Dense(3, activation='softmax'))
 
