@@ -23,7 +23,10 @@ class PongGame:
     HALF_PAD_HEIGHT = PAD_HEIGHT / 2
 
     def __init__(self):
+        self.reset()
 
+    def reset(self):
+        self.game_end = 1
         self.ball_pos = [0, 0]
         self.ball_vel = [0, 0]
         self.paddle1_pos = [self.HALF_PAD_WIDTH - 1, self.HEIGHT / 2]
@@ -47,7 +50,7 @@ class PongGame:
         h_vel = random.randrange(2, 4)
         if ri:
             h_vel *= -1
-        v_vel = random.randrange(1, 3)
+        v_vel = random.randrange(-4, 4)
         self.ball_pos = [int(self.WIDTH / 2), int(self.HEIGHT / 2)]
         self.ball_vel = [h_vel, -v_vel]
 
@@ -85,25 +88,27 @@ class PongGame:
         if int(self.ball_pos[0]) <= self.BALL_RADIUS + self.PAD_WIDTH and int(self.ball_pos[1]) in range(
                 int(self.paddle1_pos[1] - self.HALF_PAD_HEIGHT), int(self.paddle1_pos[1] + self.HALF_PAD_HEIGHT), 1):
             self.ball_vel[0] = -self.ball_vel[0]
-            self.agent1_catch = 1
+            self.agent1_catch += 1
             self.ball_vel[0] *= 1.1
             self.ball_vel[1] *= 1.1
         elif int(self.ball_pos[0]) <= self.BALL_RADIUS + self.PAD_WIDTH:
             self.r_score += 1
+            self.reset()
             self.ball_init(True)
 
         if int(self.ball_pos[0]) >= self.WIDTH + 1 - self.BALL_RADIUS - self.PAD_WIDTH and int(
                 self.ball_pos[1]) in range(
             int(self.paddle2_pos[1] - self.HALF_PAD_HEIGHT), int(self.paddle2_pos[1] + self.HALF_PAD_HEIGHT), 1):
             self.ball_vel[0] = -self.ball_vel[0]
-            self.agent2_catch = 1
+            self.agent2_catch += 1
             self.ball_vel[0] *= 1.1
             self.ball_vel[1] *= 1.1
         elif int(self.ball_pos[0]) >= self.WIDTH + 1 - self.BALL_RADIUS - self.PAD_WIDTH:
             self.l_score += 1
+            self.reset()
             self.ball_init(False)
 
-        return self.ball_pos[0]/self.WIDTH, self.ball_pos[1]/self.HEIGHT
+        return self.ball_pos[0]/self.WIDTH, self.ball_pos[1]/self.HEIGHT, self.ball_vel[0]/self.WIDTH, self.ball_vel[1]/self.HEIGHT
 
     def draw(self, canvas):
         canvas.fill(BLACK)
@@ -140,7 +145,6 @@ class Agent:
 
     def action(self):
         value = np.argmax(self.action_state) - 1
-
         return value * self.mul
 
 
@@ -162,19 +166,17 @@ class Network:
 
     def __define_network(self):
         self.model = Sequential()
-        self.model.add(Dense(32, input_shape=(4,)))
-
-        self.model.add(GaussianDropout(0.3))
-
-        self.model.add(Dense(100, activation='elu'))
-        self.model.add(Dense(100, activation='elu'))
-        self.model.add(Dense(100, activation='elu'))
+        self.model.add(Dense(32, input_shape=(6,)))
+        self.model.add(Dense(64, activation='relu'))
+        self.model.add(Dense(128, activation='relu'))
+        self.model.add(Dense(64, activation='relu'))
+        self.model.add(Dense(32, activation='relu'))
 
         self.model.add(Dense(3, activation='softmax'))
 
     def __compile_network(self):
-        optimizer = TFOptimizer(tf.train.GradientDescentOptimizer(0.1))
-        self.model.compile(loss='mean_squared_error', optimizer=optimizer)
+        optimizer = TFOptimizer(tf.train.AdamOptimizer(0.001))
+        self.model.compile(loss='binary_crossentropy', optimizer=optimizer)
 
     def action(self, state):
         value = self.model.predict(state)
@@ -183,7 +185,7 @@ class Network:
     def train(self, state, reward):
         self.model.train_on_batch(state, reward)
         self.run_count += 1
-        if self.run_count % 100 == 1:
+        if self.run_count % 1000 == 1:
             self.model.save_weights(self.filename)
 
 
@@ -203,10 +205,7 @@ if __name__ == "__main__":
     pygame.display.set_caption('Hello World')
     i = 0
     for i in tqdm(range(100000)):
-        if (i % 1000 == 1):
-            game.l_score = 0
-            game.r_score = 0
-            print(str(game.l_score) + " - " + str(game.r_score))
+
         new_state = np.array(game.tick(agent_action_1=agent1.action(), agent_action_2=agent2.action()))
 
         hit_state = [game.agent1_catch, game.agent2_catch]
@@ -220,20 +219,23 @@ if __name__ == "__main__":
 
         norm_ball_h = game.ball_pos[1]/game.HEIGHT
 
-        reward_1 = np.subtract(reward_1, abs((game.paddle1_pos[1]/game.HEIGHT) - norm_ball_h))
-        reward_2 = np.subtract(reward_2, abs((game.paddle2_pos[1]/game.HEIGHT) - norm_ball_h))
+        paddle1_s = 1 - abs(norm_ball_h-(game.paddle1_pos[1]/game.HEIGHT))
+        paddle2_s = 1 - abs(norm_ball_h-(game.paddle2_pos[1]/game.HEIGHT))
 
-        reward_1 = np.multiply(reward_1, (game.r_score+1)/(game.l_score+1))
-        reward_2 = np.multiply(reward_2, (game.l_score+1)/(game.r_score+1))
+        reward_1 = np.multiply(reward_1, paddle1_s)
+        reward_2 = np.multiply(reward_2, paddle2_s)
 
-        reward_1 = np.multiply(reward_1, hit_state[0])
-        reward_2 = np.multiply(reward_2, hit_state[1])
+        # reward_1 = np.multiply(reward_1, (game.r_score+1)/(game.l_score+1))
+        # reward_2 = np.multiply(reward_2, (game.l_score+1)/(game.r_score+1))
 
-        new_state_1 = np.append(new_state, np.array([game.paddle1_pos[1]/game.HEIGHT, game.paddle2_pos[1]/game.HEIGHT]))
+        # reward_1 = np.multiply(reward_1, hit_state[0]*10)
+        # reward_2 = np.multiply(reward_2, hit_state[1]*10)
+
+        new_state_1 = np.append(new_state, np.array([(game.paddle1_pos[1]-game.HALF_PAD_HEIGHT)/game.HEIGHT, (game.paddle2_pos[1]-game.HALF_PAD_HEIGHT)/game.HEIGHT]))
         new_state_1.flatten()
         new_state_1 = np.reshape(new_state_1, (-1, 1))
 
-        new_state_2 = np.append(new_state, np.array([game.paddle2_pos[1]/game.HEIGHT, game.paddle1_pos[1]/game.HEIGHT]))
+        new_state_2 = np.append(new_state, np.array([(game.paddle2_pos[1]-game.HALF_PAD_HEIGHT)/game.HEIGHT, (game.paddle1_pos[1]-game.HALF_PAD_HEIGHT)/game.HEIGHT]))
         new_state_2.flatten()
         new_state_2 = np.reshape(new_state_2, (-1, 1))
 
