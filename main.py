@@ -108,7 +108,7 @@ class PongGame:
             self.reset()
             self.ball_init(False)
 
-        return self.ball_pos[0]/self.WIDTH, self.ball_pos[1]/self.HEIGHT, self.ball_vel[0]/self.WIDTH, self.ball_vel[1]/self.HEIGHT
+        return (self.ball_pos[0]-self.BALL_RADIUS)/self.WIDTH, (self.ball_pos[1]-self.BALL_RADIUS)/self.HEIGHT, self.ball_vel[0]/self.WIDTH, self.ball_vel[1]/self.HEIGHT
 
     def draw(self, canvas):
         canvas.fill(BLACK)
@@ -167,11 +167,8 @@ class Network:
 
     def __define_network(self):
         self.model = Sequential()
-        self.model.add(Dense(32, input_shape=(6,)))
-        self.model.add(Dense(64, activation='relu'))
+        self.model.add(Dense(32, input_shape=(5,)))
         self.model.add(Dense(128, activation='relu'))
-
-
         self.model.add(Dense(3, activation='softmax'))
 
     def __compile_network(self):
@@ -231,11 +228,11 @@ if __name__ == "__main__":
         # reward_1 = np.multiply(reward_1, hit_state[0]*10)
         # reward_2 = np.multiply(reward_2, hit_state[1]*10)
 
-        new_state_1 = np.append(new_state, np.array([(game.paddle1_pos[1]-game.HALF_PAD_HEIGHT)/game.HEIGHT, (game.paddle2_pos[1]-game.HALF_PAD_HEIGHT)/game.HEIGHT]))
+        new_state_1 = np.append(new_state, np.array([(game.paddle1_pos[1]-game.HALF_PAD_HEIGHT)/game.HEIGHT]))
         new_state_1.flatten()
         new_state_1 = np.reshape(new_state_1, (-1, 1))
 
-        new_state_2 = np.append(new_state, np.array([(game.paddle2_pos[1]-game.HALF_PAD_HEIGHT)/game.HEIGHT, (game.paddle1_pos[1]-game.HALF_PAD_HEIGHT)/game.HEIGHT]))
+        new_state_2 = np.append(new_state, np.array([(game.paddle2_pos[1]-game.HALF_PAD_HEIGHT)/game.HEIGHT]))
         new_state_2.flatten()
         new_state_2 = np.reshape(new_state_2, (-1, 1))
 
