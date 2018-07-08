@@ -1,14 +1,12 @@
 import random
-from time import sleep
-
 import pygame
-from pygame.locals import *
+
 from keras.models import Sequential
 from keras.layers import *
-from keras.backend import argmax
-from keras.optimizers import SGD
+from keras.optimizers import TFOptimizer
+import tensorflow as tf
+from tqdm import tqdm
 
-# colors
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
 GREEN = (0, 255, 0)
@@ -37,6 +35,9 @@ class PongGame:
         self.paddle1_vel = 0
         self.paddle2_vel = 0
 
+        self.agent1_catch = 0
+        self.agent2_catch = 0
+
         if random.randrange(0, 1) == 0:
             self.ball_init(False)
         else:
@@ -47,6 +48,7 @@ class PongGame:
         if ri:
             h_vel *= -1
         v_vel = random.randrange(1, 3)
+        self.ball_pos = [int(self.WIDTH / 2), int(self.HEIGHT / 2)]
         self.ball_vel = [h_vel, -v_vel]
 
     def tick(self, agent_action_1, agent_action_2):
@@ -83,6 +85,7 @@ class PongGame:
         if int(self.ball_pos[0]) <= self.BALL_RADIUS + self.PAD_WIDTH and int(self.ball_pos[1]) in range(
                 int(self.paddle1_pos[1] - self.HALF_PAD_HEIGHT), int(self.paddle1_pos[1] + self.HALF_PAD_HEIGHT), 1):
             self.ball_vel[0] = -self.ball_vel[0]
+            self.agent1_catch += 1
             self.ball_vel[0] *= 1.1
             self.ball_vel[1] *= 1.1
         elif int(self.ball_pos[0]) <= self.BALL_RADIUS + self.PAD_WIDTH:
@@ -93,6 +96,7 @@ class PongGame:
                 self.ball_pos[1]) in range(
             int(self.paddle2_pos[1] - self.HALF_PAD_HEIGHT), int(self.paddle2_pos[1] + self.HALF_PAD_HEIGHT), 1):
             self.ball_vel[0] = -self.ball_vel[0]
+            self.agent2_catch += 1
             self.ball_vel[0] *= 1.1
             self.ball_vel[1] *= 1.1
         elif int(self.ball_pos[0]) >= self.WIDTH + 1 - self.BALL_RADIUS - self.PAD_WIDTH:
@@ -102,7 +106,7 @@ class PongGame:
         return self.ball_pos, self.ball_vel
 
     def draw(self, canvas):
-        canvas.fill(RED)
+        canvas.fill(BLACK)
 
         # draw paddles and ball
         pygame.draw.circle(canvas, RED, self.ball_pos, 20, 0)
@@ -129,40 +133,53 @@ class PongGame:
         canvas.blit(label2, (470, 20))
 
 
-
 class Agent:
     def __init__(self, press_mul):
         self.mul = press_mul
-        self.action_state = 0
+        self.action_state = np.empty([1, 3])
 
     def action(self):
-        return self.action_state * self.mul
+        value = np.argmax(self.action_state) - 1
+
+        return value * self.mul
 
 
 class Network:
-    #TODO: add training function
-    def __init__(self):
+    # TODO: add training function
+    def __init__(self, filename):
+        self.learning_rate = 1e-4
+        self.filename = filename
+
         self.__define_network()
+        try:
+            self.model.load_weights(self.filename)
+        except:
+            pass
+
         self.__compile_network()
         self.model.summary()
+        self.run_count = 0
 
     def __define_network(self):
         self.model = Sequential()
-        self.model.add(Dense(32,input_shape=(8,)))
-        self.model.add(Dense(255, activation='relu'))
-        self.model.add(GaussianDropout(.1))
-        self.model.add(Dense(255, activation='relu'))
+        self.model.add(Dense(32, input_shape=(8,)))
+        self.model.add(Dense(100, activation='relu'))
+        self.model.add(GaussianDropout(0.3))
         self.model.add(Dense(3, activation='softmax'))
 
     def __compile_network(self):
-        sgd = SGD(lr=0.1, decay=1e-6, momentum=0.9)
-        self.model.compile(loss='categorical_crossentropy', optimizer=sgd, metrics=['accuracy'])
+        optimizer = TFOptimizer(tf.train.GradientDescentOptimizer(0.1))
+        self.model.compile(loss='mean_squared_error', optimizer=optimizer)
 
     def action(self, state):
         value = self.model.predict(state)
-        value = np.argmax(value) -1
-        print(str(value))
         return value
+
+    def train(self, state, reward):
+        self.model.train_on_batch(state, reward)
+        self.run_count += 1
+        if self.run_count % 100 == 1:
+            self.model.save_weights(self.filename)
 
 
 if __name__ == "__main__":
@@ -172,25 +189,38 @@ if __name__ == "__main__":
     agent1 = Agent(8)
     agent2 = Agent(8)
 
-    model_net = Network()
+    model_net_1 = Network("m1.h5")
+
     pygame.init()
     fps = pygame.time.Clock()
     window = pygame.display.set_mode((game.WIDTH, game.HEIGHT), 0, 32)
     pygame.display.set_caption('Hello World')
-    while True:
+    i = 0
+    for i in tqdm(range(100000)):
         print(str(game.l_score) + " - " + str(game.r_score))
-        new_state = game.tick(agent_action_1=agent1.action(), agent_action_2=agent2.action())
+        new_state = np.array(game.tick(agent_action_1=agent1.action(), agent_action_2=agent2.action()))
 
-        new_state_1 = np.array(new_state)
-        tmp_ss = np.array([game.paddle1_pos, game.paddle2_pos])
-        new_state_1 = np.append(new_state_1,tmp_ss)
+        hit_count = [game.agent1_catch, game.agent2_catch]
+        hit_sum = np.sum(hit_count)
+
+        reward_1 = np.multiply(agent1.action_state, hit_sum)
+        reward_2 = np.multiply(agent2.action_state, hit_sum)
+
+        reward_1 = np.multiply(reward_1, game.l_score)
+        reward_2 = np.multiply(reward_2, game.r_score)
+
+        new_state_1 = np.append(new_state, np.array([game.paddle1_pos, game.paddle2_pos]))
         new_state_1.flatten()
-        new_state_1 = np.reshape(new_state_1,(-1,1))
-        print(new_state_1.shape)
+        new_state_1 = np.reshape(new_state_1, (-1, 1))
+        model_net_1.train(new_state_1.T, reward_1)
 
-        agent1.action_state = model_net.action(new_state_1.T)
+        new_state_2 = np.append(new_state, np.array([game.paddle2_pos, game.paddle1_pos]))
+        new_state_2.flatten()
+        new_state_2 = np.reshape(new_state_2, (-1, 1))
+        model_net_1.train(new_state_2.T, reward_2)
 
+        agent1.action_state = model_net_1.action(new_state_1.T)
+        agent2.action_state = model_net_1.action(new_state_2.T)
 
         game.draw(window)
         pygame.display.update()
-
