@@ -16,7 +16,7 @@ BLACK = (0, 0, 0)
 class PongGame:
     WIDTH = 600
     HEIGHT = 400
-    BALL_RADIUS = 20
+    BALL_RADIUS = 5
     PAD_WIDTH = 8
     PAD_HEIGHT = 80
     HALF_PAD_WIDTH = PAD_WIDTH / 2
@@ -114,7 +114,7 @@ class PongGame:
         canvas.fill(BLACK)
 
         # draw paddles and ball
-        pygame.draw.circle(canvas, RED, self.ball_pos, 20, 0)
+        pygame.draw.circle(canvas, RED, self.ball_pos, self.BALL_RADIUS, 0)
         pygame.draw.polygon(canvas, GREEN,
                             [[self.paddle1_pos[0] - self.HALF_PAD_WIDTH, self.paddle1_pos[1] - self.HALF_PAD_HEIGHT],
                              [self.paddle1_pos[0] - self.HALF_PAD_WIDTH, self.paddle1_pos[1] + self.HALF_PAD_HEIGHT],
@@ -201,8 +201,8 @@ if __name__ == "__main__":
     window = pygame.display.set_mode((game.WIDTH, game.HEIGHT), 0, 32)
     pygame.display.set_caption('Hello World')
     i = 0
-    for i in tqdm(range(15001)):
-
+    for i in tqdm(range(20000)):
+        # TODO: implement mirroring for shared network
         new_state = np.array(game.tick(agent_action_1=agent1.action(), agent_action_2=agent2.action()))
 
         hit_state = [game.agent1_catch, game.agent2_catch]
@@ -221,12 +221,6 @@ if __name__ == "__main__":
 
         reward_1 = np.multiply(reward_1, paddle1_s)
         reward_2 = np.multiply(reward_2, paddle2_s)
-
-        # reward_1 = np.multiply(reward_1, (game.r_score+1)/(game.l_score+1))
-        # reward_2 = np.multiply(reward_2, (game.l_score+1)/(game.r_score+1))
-
-        # reward_1 = np.multiply(reward_1, hit_state[0]*10)
-        # reward_2 = np.multiply(reward_2, hit_state[1]*10)
 
         new_state_1 = np.append(new_state, np.array([(game.paddle1_pos[1]-game.HALF_PAD_HEIGHT)/game.HEIGHT]))
         new_state_1.flatten()
