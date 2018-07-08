@@ -201,7 +201,7 @@ if __name__ == "__main__":
     window = pygame.display.set_mode((game.WIDTH, game.HEIGHT), 0, 32)
     pygame.display.set_caption('Hello World')
     i = 0
-    for i in tqdm(range(100000)):
+    for i in tqdm(range(15001)):
 
         new_state = np.array(game.tick(agent_action_1=agent1.action(), agent_action_2=agent2.action()))
 
