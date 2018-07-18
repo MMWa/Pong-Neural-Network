@@ -23,6 +23,10 @@ class PongGame:
     HALF_PAD_HEIGHT = PAD_HEIGHT / 2
 
     def __init__(self):
+        pygame.init()
+        self.window = pygame.display.set_mode((self.WIDTH, self.HEIGHT))
+        pygame.display.set_caption('Pong using NN')
+
         self.reset()
 
     def reset(self):
@@ -110,18 +114,19 @@ class PongGame:
 
         return (self.ball_pos[0]-self.BALL_RADIUS)/self.WIDTH, (self.ball_pos[1]-self.BALL_RADIUS)/self.HEIGHT, self.ball_vel[0]/self.WIDTH, self.ball_vel[1]/self.HEIGHT
 
-    def draw(self, canvas):
-        canvas.fill(BLACK)
+    def draw(self):
+        event = pygame.event.get()
+        self.window.fill(BLACK)
 
         # draw paddles and ball
-        pygame.draw.circle(canvas, RED, self.ball_pos, self.BALL_RADIUS, 0)
-        pygame.draw.polygon(canvas, GREEN,
+        pygame.draw.circle(self.window, RED, self.ball_pos, self.BALL_RADIUS, 0)
+        pygame.draw.polygon(self.window, GREEN,
                             [[self.paddle1_pos[0] - self.HALF_PAD_WIDTH, self.paddle1_pos[1] - self.HALF_PAD_HEIGHT],
                              [self.paddle1_pos[0] - self.HALF_PAD_WIDTH, self.paddle1_pos[1] + self.HALF_PAD_HEIGHT],
                              [self.paddle1_pos[0] + self.HALF_PAD_WIDTH, self.paddle1_pos[1] + self.HALF_PAD_HEIGHT],
                              [self.paddle1_pos[0] + self.HALF_PAD_WIDTH, self.paddle1_pos[1] - self.HALF_PAD_HEIGHT]],
                             0)
-        pygame.draw.polygon(canvas, GREEN,
+        pygame.draw.polygon(self.window, GREEN,
                             [[self.paddle2_pos[0] - self.HALF_PAD_WIDTH, self.paddle2_pos[1] - self.HALF_PAD_HEIGHT],
                              [self.paddle2_pos[0] - self.HALF_PAD_WIDTH, self.paddle2_pos[1] + self.HALF_PAD_HEIGHT],
                              [self.paddle2_pos[0] + self.HALF_PAD_WIDTH, self.paddle2_pos[1] + self.HALF_PAD_HEIGHT],
@@ -131,11 +136,12 @@ class PongGame:
         # update scores
         myfont1 = pygame.font.SysFont("Comic Sans MS", 20)
         label1 = myfont1.render("Score " + str(self.l_score), 1, (255, 255, 0))
-        canvas.blit(label1, (50, 20))
+        self.window.blit(label1, (50, 20))
 
         myfont2 = pygame.font.SysFont("Comic Sans MS", 20)
         label2 = myfont2.render("Score " + str(self.r_score), 1, (255, 255, 0))
-        canvas.blit(label2, (470, 20))
+        self.window.blit(label2, (470, 20))
+        pygame.display.flip()
 
 
 class Agent:
@@ -196,10 +202,6 @@ if __name__ == "__main__":
     model_net_1 = Network("m1.h5")
     model_net_2 = Network("m2.h5")
 
-    pygame.init()
-    fps = pygame.time.Clock()
-    window = pygame.display.set_mode((game.WIDTH, game.HEIGHT), 0, 32)
-    pygame.display.set_caption('Hello World')
     i = 0
     for i in tqdm(range(20000)):
         # TODO: implement mirroring for shared network
@@ -216,6 +218,7 @@ if __name__ == "__main__":
 
         norm_ball_h = game.ball_pos[1]/game.HEIGHT
 
+        # delta ball to paddle
         paddle1_s = 1 - abs(norm_ball_h-(game.paddle1_pos[1]/game.HEIGHT))
         paddle2_s = 1 - abs(norm_ball_h-(game.paddle2_pos[1]/game.HEIGHT))
 
@@ -236,5 +239,5 @@ if __name__ == "__main__":
         agent1.action_state = model_net_1.action(new_state_1.T)
         agent2.action_state = model_net_2.action(new_state_2.T)
 
-        game.draw(window)
-        pygame.display.update()
+        game.draw()
+
