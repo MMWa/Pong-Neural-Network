@@ -115,6 +115,7 @@ class PongGame:
         return (self.ball_pos[0]-self.BALL_RADIUS)/self.WIDTH, (self.ball_pos[1]-self.BALL_RADIUS)/self.HEIGHT, self.ball_vel[0]/self.WIDTH, self.ball_vel[1]/self.HEIGHT
 
     def draw(self):
+        # needed to prevent window freeze
         event = pygame.event.get()
         self.window.fill(BLACK)
 
